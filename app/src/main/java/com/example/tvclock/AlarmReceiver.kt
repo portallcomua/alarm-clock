@@ -30,6 +30,8 @@ class AlarmReceiver : BroadcastReceiver() {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 putExtra("ALARM_LABEL", label)
                 putExtra("ALARM_ID", alarmId)
+                putExtra("ALARM_AUDIO_URI", audioUri)
+                putExtra("ALARM_SPOKEN_TEXT", spokenText)
             }
             try { context.startActivity(activityIntent) } catch (_: Exception) { }
         }
