@@ -9,10 +9,14 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val label = intent.getStringExtra("ALARM_LABEL") ?: "Будильник"
         val alarmId = intent.getIntExtra("ALARM_ID", 0)
+        val audioUri = intent.getStringExtra("ALARM_AUDIO_URI")
+        val spokenText = intent.getStringExtra("ALARM_SPOKEN_TEXT") ?: ""
 
         val ringIntent = Intent(context, AlarmRingService::class.java).apply {
             putExtra("ALARM_LABEL", label)
             putExtra("ALARM_ID", alarmId)
+            putExtra("ALARM_AUDIO_URI", audioUri)
+            putExtra("ALARM_SPOKEN_TEXT", spokenText)
         }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
