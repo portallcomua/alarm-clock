@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.AnalogClock
@@ -67,6 +68,32 @@ class ClockOverlayService : Service() {
             container.setBackgroundColor(Color.parseColor("#99000000"))
             container.setPadding(dp(18), dp(10), dp(18), dp(10))
         }
+        clockView.isClickable = true
+        clockView.setOnClickListener {
+            val settingsIntent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            try { startActivity(settingsIntent) } catch (_: Exception) { }
+        }
+        val tvFullscreen = isLargeScreen && prefs.isFullScreen
+        if (tvFullscreen) {
+            clockView.isFocusable = true
+            clockView.isFocusableInTouchMode = true
+            clockView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_UP &&
+                    (keyCode == KeyEvent.KEYCODE_MENU ||
+                     keyCode == KeyEvent.KEYCODE_SETTINGS ||
+                     keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                     keyCode == KeyEvent.KEYCODE_ENTER)
+                ) {
+                    val settingsIntent = Intent(this, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    try { startActivity(settingsIntent) } catch (_: Exception) { }
+                    true
+                } else false
+            }
+        }
         container.addView(clockView)
 
         val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -84,8 +111,7 @@ class ClockOverlayService : Service() {
             size,
             size,
             windowType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            (if (tvFullscreen) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
