@@ -10,6 +10,9 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.Uri
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -18,12 +21,15 @@ class AlarmRingService : Service() {
     private val foregroundNotificationId = 2
     private var mediaPlayer: MediaPlayer? = null
     private var fallbackRingtone: android.media.Ringtone? = null
+    private var textToSpeech: TextToSpeech? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val label = intent?.getStringExtra("ALARM_LABEL") ?: "Будильник"
         val alarmId = intent?.getIntExtra("ALARM_ID", 0) ?: 0
+        val audioUri = intent?.getStringExtra("ALARM_AUDIO_URI")
+        val spokenText = intent?.getStringExtra("ALARM_SPOKEN_TEXT")?.trim().orEmpty()
         val channelId = "alarm_ringing"
         val notificationManager = getSystemService(NotificationManager::class.java)
 
@@ -65,12 +71,14 @@ class AlarmRingService : Service() {
             startForeground(foregroundNotificationId, notification)
         }
 
-        if (mediaPlayer == null && fallbackRingtone == null) startAlarmAudio()
+        if (mediaPlayer == null && fallbackRingtone == null) startAlarmAudio(audioUri)
+        if (spokenText.isNotBlank()) speakMessage(spokenText)
         return START_NOT_STICKY
     }
 
-    private fun startAlarmAudio() {
-        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+    private fun startAlarmAudio(customUri: String?) {
+        val alarmUri = customUri?.let { Uri.parse(it) }
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             ?: return
 
@@ -104,6 +112,23 @@ class AlarmRingService : Service() {
         }
     }
 
+    private fun speakMessage(message: String) {
+        try {
+            textToSpeech?.shutdown()
+            textToSpeech = TextToSpeech(this) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    val engine = textToSpeech ?: return@TextToSpeech
+                    val languageResult = engine.setLanguage(Locale.getDefault())
+                    if (languageResult != TextToSpeech.LANG_MISSING_DATA &&
+                        languageResult != TextToSpeech.LANG_NOT_SUPPORTED
+                    ) {
+                        engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, "alarm_message")
+                    }
+                }
+            }
+        } catch (_: Exception) { }
+    }
+
     private fun startFallbackRingtone(uri: android.net.Uri) {
         try {
             fallbackRingtone = RingtoneManager.getRingtone(this, uri)?.apply {
@@ -125,6 +150,9 @@ class AlarmRingService : Service() {
         mediaPlayer = null
         try { fallbackRingtone?.stop() } catch (_: Exception) { }
         fallbackRingtone = null
+        try { textToSpeech?.stop() } catch (_: Exception) { }
+        try { textToSpeech?.shutdown() } catch (_: Exception) { }
+        textToSpeech = null
         super.onDestroy()
     }
 }
