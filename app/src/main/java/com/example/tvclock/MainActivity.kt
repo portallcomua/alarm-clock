@@ -1,10 +1,9 @@
 package com.example.tvclock
 
-import android.app.AlarmManager
+import android.Manifest
 import android.app.AlertDialog
-import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
@@ -13,305 +12,488 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
-import android.view.View
-import android.widget.*
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import java.util.Calendar
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: PrefsManager
     private lateinit var alarmsContainer: LinearLayout
+    private lateinit var clockButton: Button
+    private lateinit var modeButton: Button
+    private lateinit var styleButton: Button
+    private lateinit var bootButton: Button
+    private var pendingAudioUri: Uri? = null
+    private var audioStatusView: TextView? = null
+    private val audioPickerRequest = 2001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = PrefsManager(this)
+        requestNotificationPermissionIfNeeded()
 
-        val scrollView = ScrollView(this).apply {
-            setBackgroundColor(Color.parseColor("#0F172A"))
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(Color.rgb(15, 23, 42))
+            isFillViewport = true
         }
-
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 36, 48, 36)
+            setPadding(dp(20), dp(20), dp(20), dp(28))
         }
 
-        val header = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "⏰ ТВ Годинник та Будильник"
-            textSize = 26f
+            textSize = 25f
             setTextColor(Color.WHITE)
-            setPadding(0, 0, 0, 24)
-        }
-        root.addView(header)
+            setPadding(0, 0, 0, dp(8))
+        })
+        root.addView(TextView(this).apply {
+            text = "Годинник для екрана та будильники на кожен день."
+            textSize = 15f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, 0, 0, dp(18))
+        })
 
-        // 1. Кнопка Увімкнути / Вимкнути годинник
-        val btnToggleClock = createTvButton(
-            if (prefs.isClockActive) "🟢 Годинник: УВІМКНЕНО (Натисніть, щоб вимкнути)"
-            else "⚪ Годинник: ВИМКНЕНО (Натисніть, щоб увімкнути)"
-        )
-        btnToggleClock.setOnClickListener {
-            toggleClock(btnToggleClock)
+        val updateButton = createTvButton("↻  Оновлення застосунку з GitHub")
+        updateButton.setOnClickListener {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/portallcomua/alarm-clock/releases/latest")))
+            } catch (_: Exception) {
+                Toast.makeText(this, "Не вдалося відкрити сторінку оновлень GitHub.", Toast.LENGTH_LONG).show()
+            }
         }
-        root.addView(btnToggleClock)
+        root.addView(updateButton)
 
-        // 2. Режим відображення: Кут екрана чи Весь екран
-        val btnMode = createTvButton(
-            if (prefs.isFullScreen) "🖥️ Режим: НА ВЕСЬ ЕКРАН (як заставка)"
-            else "↗️ Режим: В ПРАВОМУ ВЕРХНЬОМУ КУТКУ"
-        )
-        btnMode.setOnClickListener {
+        clockButton = createTvButton("")
+        clockButton.setOnClickListener { toggleClock() }
+        root.addView(clockButton)
+
+        modeButton = createTvButton("")
+        modeButton.setOnClickListener {
             prefs.isFullScreen = !prefs.isFullScreen
-            btnMode.text = if (prefs.isFullScreen) "🖥️ Режим: НА ВЕСЬ ЕКРАН (як заставка)"
-            else "↗️ Режим: В ПРАВОМУ ВЕРХНЬОМУ КУТКУ"
+            updateButtons()
             restartOverlayIfActive()
         }
-        root.addView(btnMode)
+        root.addView(modeButton)
 
-        // 3. Вигляд: Електронний чи Циферблат
-        val btnStyle = createTvButton(
-            if (prefs.isAnalog) "🕰️ Вигляд: СТРІЛКОВИЙ ЦИФЕРБЛАТ"
-            else "🔢 Вигляд: ЕЛЕКТРОННИЙ ГОДИННИК"
-        )
-        btnStyle.setOnClickListener {
+        styleButton = createTvButton("")
+        styleButton.setOnClickListener {
             prefs.isAnalog = !prefs.isAnalog
-            btnStyle.text = if (prefs.isAnalog) "🕰️ Вигляд: СТРІЛКОВИЙ ЦИФЕРБЛАТ"
-            else "🔢 Вигляд: ЕЛЕКТРОННИЙ ГОДИННИК"
+            updateButtons()
             restartOverlayIfActive()
         }
-        root.addView(btnStyle)
+        root.addView(styleButton)
 
-        // 4. Автозапуск при ввімкненні ТВ
-        val btnBoot = createTvButton(
-            if (prefs.autoStartOnBoot) "🚀 Автозапуск при ввімкненні ТВ: ТАК"
-            else "🛑 Автозапуск при ввімкненні ТВ: НІ"
-        )
-        btnBoot.setOnClickListener {
+        bootButton = createTvButton("")
+        bootButton.setOnClickListener {
             prefs.autoStartOnBoot = !prefs.autoStartOnBoot
-            btnBoot.text = if (prefs.autoStartOnBoot) "🚀 Автозапуск при ввімкненні ТВ: ТАК"
-            else "🛑 Автозапуск при ввімкненні ТВ: НІ"
+            updateButtons()
+            Toast.makeText(
+                this,
+                if (prefs.autoStartOnBoot) "Автозапуск увімкнено" else "Автозапуск вимкнено",
+                Toast.LENGTH_SHORT
+            ).show()
         }
-        root.addView(btnBoot)
+        root.addView(bootButton)
+        updateButtons()
 
-        // Розділ будильників
-        val alarmTitle = TextView(this).apply {
-            text = "Мої будильники:"
-            textSize = 22f
-            setTextColor(Color.parseColor("#38BDF8"))
-            setPadding(0, 32, 0, 16)
-        }
-        root.addView(alarmTitle)
+        root.addView(TextView(this).apply {
+            text = "Мої будильники"
+            textSize = 21f
+            setTextColor(Color.rgb(56, 189, 248))
+            setPadding(0, dp(26), 0, dp(10))
+        })
 
-        val btnAddAlarm = createTvButton("➕ Додати новий будильник")
-        btnAddAlarm.setOnClickListener { showAddAlarmDialog() }
-        root.addView(btnAddAlarm)
+        val addButton = createTvButton("＋  Додати будильник")
+        addButton.setOnClickListener { showAlarmDialog() }
+        root.addView(addButton)
 
         alarmsContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 16, 0, 0)
+            setPadding(0, dp(10), 0, 0)
         }
         root.addView(alarmsContainer)
-
+        scroll.addView(root)
+        setContentView(scroll)
         renderAlarmsList()
-
-        scrollView.addView(root)
-        setContentView(scrollView)
-        btnToggleClock.requestFocus()
+        clockButton.requestFocus()
     }
 
-    // Створення кнопки з яскравою обводкою при виборі пультом ТВ
-    private fun createTvButton(label: String): Button {
-        return Button(this).apply {
-            text = label
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            setPadding(32, 24, 32, 24)
-            isFocusable = true
-            isFocusableInTouchMode = true
-
-            val focusedDrawable = GradientDrawable().apply {
-                setColor(Color.parseColor("#2563EB"))
-                setStroke(6, Color.parseColor("#FACC15")) // Жовта рамка для пульта
-                cornerRadius = 16f
-            }
-            val normalDrawable = GradientDrawable().apply {
-                setColor(Color.parseColor("#1E293B"))
-                setStroke(2, Color.parseColor("#334155"))
-                cornerRadius = 16f
-            }
-            val states = StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_focused), focusedDrawable)
-                addState(intArrayOf(), normalDrawable)
-            }
-            background = states
-
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 0, 0, 16) }
-            layoutParams = params
+    @Deprecated("Deprecated in Android API; retained for broad device compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == audioPickerRequest && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) { }
+            pendingAudioUri = uri
+            audioStatusView?.text = "Обрано: " + (uri.lastPathSegment ?: "аудіофайл")
         }
     }
 
-    private fun toggleClock(btn: Button) {
+    override fun onResume() {
+        super.onResume()
+        if (::prefs.isInitialized) {
+            AlarmScheduler.rescheduleAll(this)
+            if (::clockButton.isInitialized) updateButtons()
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+    }
+
+    private fun updateButtons() {
+        clockButton.text = if (prefs.isClockActive) {
+            "🟢  Годинник: УВІМКНЕНО"
+        } else {
+            "⚪  Годинник: ВИМКНЕНО"
+        }
+        modeButton.text = if (prefs.isFullScreen) {
+            "▣  Відображення: НА ВЕСЬ ЕКРАН"
+        } else {
+            "↗  Відображення: У КУТКУ"
+        }
+        styleButton.text = if (prefs.isAnalog) {
+            "◷  Стиль: СТРІЛКОВИЙ"
+        } else {
+            "◷  Стиль: ЕЛЕКТРОННИЙ"
+        }
+        bootButton.text = if (prefs.autoStartOnBoot) {
+            "🚀  Автозапуск після ввімкнення: ТАК"
+        } else {
+            "⏻  Автозапуск після ввімкнення: НІ"
+        }
+    }
+
+    private fun createTvButton(label: String): Button = Button(this).apply {
+        text = label
+        textSize = 16f
+        isAllCaps = false
+        setTextColor(Color.WHITE)
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        setPadding(dp(18), dp(13), dp(18), dp(13))
+        isFocusable = true
+        isFocusableInTouchMode = true
+
+        val focused = GradientDrawable().apply {
+            setColor(Color.rgb(37, 99, 235))
+            setStroke(dp(3), Color.rgb(250, 204, 21))
+            cornerRadius = dp(12).toFloat()
+        }
+        val normal = GradientDrawable().apply {
+            setColor(Color.rgb(30, 41, 59))
+            setStroke(dp(1), Color.rgb(51, 65, 85))
+            cornerRadius = dp(12).toFloat()
+        }
+        background = StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), focused)
+            addState(intArrayOf(), normal)
+        }
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 0, 0, dp(10)) }
+    }
+
+    private fun createSmallButton(label: String, onClick: () -> Unit): Button =
+        Button(this).apply {
+            text = label
+            textSize = 13f
+            isAllCaps = false
+            minHeight = dp(44)
+            setPadding(dp(5), dp(4), dp(5), dp(4))
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }
+
+    private fun toggleClock() {
         if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "Надайте дозвіл 'Поверх інших вікон' у налаштуваннях ТВ", Toast.LENGTH_LONG).show()
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            Toast.makeText(
+                this,
+                "Надайте дозвіл «Поверх інших вікон», щоб показувати годинник поверх програм.",
+                Toast.LENGTH_LONG
+            ).show()
+            try {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            } catch (_: Exception) {
+                Toast.makeText(this, "Не вдалося відкрити налаштування дозволів.", Toast.LENGTH_LONG).show()
+            }
             return
         }
 
-        val intent = Intent(this, ClockOverlayService::class.java)
         if (prefs.isClockActive) {
-            stopService(intent)
+            stopService(Intent(this, ClockOverlayService::class.java))
             prefs.isClockActive = false
-            btn.text = "⚪ Годинник: ВИМКНЕНО (Натисніть, щоб увімкнути)"
         } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-            else startService(intent)
-            prefs.isClockActive = true
-            btn.text = "🟢 Годинник: УВІМКНЕНО (Натисніть, щоб вимкнути)"
+            try {
+                val serviceIntent = Intent(this, ClockOverlayService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent)
+                else startService(serviceIntent)
+                prefs.isClockActive = true
+            } catch (_: Exception) {
+                prefs.isClockActive = false
+                Toast.makeText(this, "Не вдалося запустити годинник. Перевірте дозволи системи.", Toast.LENGTH_LONG).show()
+            }
         }
+        updateButtons()
     }
 
     private fun restartOverlayIfActive() {
-        if (prefs.isClockActive) {
-            stopService(Intent(this, ClockOverlayService::class.java))
-            val intent = Intent(this, ClockOverlayService::class.java)
+        if (!prefs.isClockActive) return
+        val intent = Intent(this, ClockOverlayService::class.java)
+        stopService(intent)
+        try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
             else startService(intent)
+        } catch (_: Exception) {
+            prefs.isClockActive = false
+            updateButtons()
+            Toast.makeText(this, "Годинник зупинено: система не дозволила перезапуск.", Toast.LENGTH_LONG).show()
         }
     }
 
-    // Зручне для пульта діалогове вікно створення будильника
-    private fun showAddAlarmDialog() {
-        var hour = 7
-        var minute = 30
+    private fun showAlarmDialog(existing: AlarmItem? = null) {
+        var hour = existing?.hour ?: 7
+        var minute = existing?.minute ?: 30
+        pendingAudioUri = existing?.audioUri?.let { Uri.parse(it) }
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 30, 40, 30)
-            setBackgroundColor(Color.parseColor("#1E293B"))
+            setPadding(dp(20), dp(12), dp(20), dp(8))
+            setBackgroundColor(Color.rgb(30, 41, 59))
         }
-
         val timeDisplay = TextView(this).apply {
-            text = String.format("%02d:%02d", hour, minute)
-            textSize = 42f
-            setTextColor(Color.parseColor("#FACC15"))
+            text = formatTime(hour, minute)
+            textSize = 38f
+            setTextColor(Color.rgb(250, 204, 21))
             gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(12))
         }
-
-        val controlsRow = LinearLayout(this).apply {
+        val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, 16, 0, 24)
         }
 
-        val btnHourPlus = createSmallControl("+ Год") {
+        fun refreshTime() {
+            timeDisplay.text = formatTime(hour, minute)
+        }
+
+        controls.addView(createSmallButton("− Год") {
+            hour = (hour + 23) % 24
+            refreshTime()
+        })
+        controls.addView(createSmallButton("+ Год") {
             hour = (hour + 1) % 24
-            timeDisplay.text = String.format("%02d:%02d", hour, minute)
-        }
-        val btnHourMinus = createSmallControl("- Год") {
-            hour = if (hour - 1 < 0) 23 else hour - 1
-            timeDisplay.text = String.format("%02d:%02d", hour, minute)
-        }
-        val btnMinPlus = createSmallControl("+ Хв") {
+            refreshTime()
+        })
+        controls.addView(createSmallButton("− 5 хв") {
+            minute = (minute + 55) % 60
+            refreshTime()
+        })
+        controls.addView(createSmallButton("+ 5 хв") {
             minute = (minute + 5) % 60
-            timeDisplay.text = String.format("%02d:%02d", hour, minute)
-        }
-        val btnMinMinus = createSmallControl("- Хв") {
-            minute = if (minute - 5 < 0) 55 else minute - 5
-            timeDisplay.text = String.format("%02d:%02d", hour, minute)
-        }
+            refreshTime()
+        })
 
-        controlsRow.addView(btnHourMinus)
-        controlsRow.addView(btnHourPlus)
-        controlsRow.addView(btnMinMinus)
-        controlsRow.addView(btnMinPlus)
-
-        // Поле для назви (при натисканні OK відкриє екранну клавіатуру)
-        val inputLabel = EditText(this).apply {
-            hint = "Назва (натисніть OK для клавіатури)"
+        val labelInput = EditText(this).apply {
+            hint = "Назва будильника"
+            setText(existing?.label ?: "")
             setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-            textSize = 18f
+            setHintTextColor(Color.LTGRAY)
+            textSize = 16f
+            isSingleLine = true
             isFocusable = true
         }
 
+        val spokenInput = EditText(this).apply {
+            hint = "Голосове повідомлення (необов’язково)"
+            setText(existing?.spokenText ?: "")
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.LTGRAY)
+            textSize = 16f
+            minLines = 2
+            maxLines = 4
+            gravity = Gravity.TOP
+        }
+        audioStatusView = TextView(this).apply {
+            text = pendingAudioUri?.lastPathSegment?.let { "Обрано: " + it } ?: "Звук: стандартний сигнал"
+            textSize = 13f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        val chooseAudioButton = createTvButton("🎵  Вибрати MP3 / аудіофайл").apply {
+            setOnClickListener {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "audio/*"
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                try { startActivityForResult(picker, audioPickerRequest) }
+                catch (_: Exception) { Toast.makeText(this@MainActivity, "Не вдалося відкрити вибір файлу", Toast.LENGTH_LONG).show() }
+            }
+        }
+        val clearAudioButton = createTvButton("Використовувати стандартний сигнал").apply {
+            setOnClickListener {
+                pendingAudioUri = null
+                audioStatusView?.text = "Звук: стандартний сигнал"
+            }
+        }
+
         layout.addView(timeDisplay)
-        layout.addView(controlsRow)
-        layout.addView(inputLabel)
+        layout.addView(controls)
+        layout.addView(labelInput)
+        layout.addView(TextView(this).apply {
+            text = "Власний звук та голос"
+            setTextColor(Color.rgb(56, 189, 248))
+            textSize = 16f
+            setPadding(0, dp(12), 0, 0)
+        })
+        layout.addView(chooseAudioButton)
+        layout.addView(audioStatusView)
+        layout.addView(clearAudioButton)
+        layout.addView(spokenInput)
 
         AlertDialog.Builder(this)
-            .setTitle("Новий будильник")
+            .setTitle(if (existing == null) "Новий будильник" else "Редагувати будильник")
             .setView(layout)
             .setPositiveButton("Зберегти") { _, _ ->
-                val list = prefs.getAlarms()
-                val newId = (System.currentTimeMillis() % 100000).toInt()
-                val labelText = inputLabel.text.toString().ifBlank { "Будильник" }
-                val newItem = AlarmItem(newId, hour, minute, labelText, true)
-                list.add(newItem)
-                prefs.saveAlarms(list)
-                scheduleSystemAlarm(newItem)
+                val alarms = prefs.getAlarms()
+                val label = labelInput.text.toString().trim().ifBlank { "Будильник" }
+                if (existing == null) {
+                    var id = (System.currentTimeMillis() % Int.MAX_VALUE).toInt().coerceAtLeast(1)
+                    while (alarms.any { it.id == id }) {
+                        id = if (id == Int.MAX_VALUE) 1 else id + 1
+                    }
+                    val created = AlarmItem(id, hour, minute, label, true, pendingAudioUri?.toString(), spokenInput.text.toString().trim())
+                    alarms.add(created)
+                    prefs.saveAlarms(alarms)
+                    scheduleSystemAlarm(created)
+                } else {
+                    AlarmScheduler.cancel(this, existing)
+                    val index = alarms.indexOfFirst { it.id == existing.id }
+                    if (index >= 0) {
+                        val updated = existing.copy(hour = hour, minute = minute, label = label, audioUri = pendingAudioUri?.toString(), spokenText = spokenInput.text.toString().trim())
+                        alarms[index] = updated
+                        prefs.saveAlarms(alarms)
+                        scheduleSystemAlarm(updated)
+                    }
+                }
+                pendingAudioUri = null
+                audioStatusView = null
                 renderAlarmsList()
             }
             .setNegativeButton("Скасувати", null)
             .show()
     }
 
-    private fun createSmallControl(label: String, onClick: () -> Unit): Button {
-        return Button(this).apply {
-            text = label
-            isFocusable = true
-            setOnClickListener { onClick() }
+    private fun renderAlarmsList() {
+        alarmsContainer.removeAllViews()
+        val alarms = prefs.getAlarms().sortedWith(compareBy<AlarmItem> { it.hour }.thenBy { it.minute })
+        if (alarms.isEmpty()) {
+            alarmsContainer.addView(TextView(this).apply {
+                text = "Поки що будильників немає. Додайте перший кнопкою вище."
+                textSize = 15f
+                setTextColor(Color.LTGRAY)
+                setPadding(dp(4), dp(12), dp(4), dp(12))
+            })
+            return
+        }
+
+        alarms.forEach { alarm ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                background = GradientDrawable().apply {
+                    setColor(Color.rgb(30, 41, 59))
+                    setStroke(dp(1), Color.rgb(51, 65, 85))
+                    cornerRadius = dp(10).toFloat()
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 0, dp(10)) }
+            }
+            card.addView(TextView(this).apply {
+                text = "${formatTime(alarm.hour, alarm.minute)}  ·  ${alarm.label}"
+                textSize = 19f
+                setTextColor(if (alarm.isEnabled) Color.WHITE else Color.GRAY)
+                setPadding(dp(4), dp(4), dp(4), dp(8))
+            })
+            val actions = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            fun actionButton(text: String, action: () -> Unit) {
+                actions.addView(createSmallButton(text, action), LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                ).apply { setMargins(dp(2), 0, dp(2), 0) })
+            }
+            actionButton(if (alarm.isEnabled) "Вимкнути" else "Увімкнути") {
+                val current = prefs.getAlarms()
+                val item = current.firstOrNull { it.id == alarm.id } ?: return@actionButton
+                item.isEnabled = !item.isEnabled
+                prefs.saveAlarms(current)
+                if (item.isEnabled) scheduleSystemAlarm(item) else AlarmScheduler.cancel(this, item)
+                renderAlarmsList()
+            }
+            actionButton("Змінити") { showAlarmDialog(alarm) }
+            actionButton("Видалити") {
+                AlarmScheduler.cancel(this, alarm)
+                val current = prefs.getAlarms()
+                current.removeAll { it.id == alarm.id }
+                prefs.saveAlarms(current)
+                renderAlarmsList()
+                Toast.makeText(this, "Будильник видалено", Toast.LENGTH_SHORT).show()
+            }
+            card.addView(actions)
+            alarmsContainer.addView(card)
         }
     }
 
-    private fun renderAlarmsList() {
-        alarmsContainer.removeAllViews()
-        val list = prefs.getAlarms()
-        if (list.isEmpty()) {
-            alarmsContainer.addView(TextView(this).apply {
-text = "Список порожній"
-setTextColor(Color.GRAY)
-})
-return
-}
-for (alarm in list) {
-val btn = createTvButton(
-"⏰ ${String.format("%02d:%02d", alarm.hour, alarm.minute)} — ${alarm.label} [Натисніть щоб видалити]"
-)
-btn.setOnClickListener {
-cancelSystemAlarm(alarm)
-list.remove(alarm)
-prefs.saveAlarms(list)
-renderAlarmsList()
-Toast.makeText(this, "Будильник видалено", Toast.LENGTH_SHORT).show()
-}
-alarmsContainer.addView(btn)
-}
-}
-private fun scheduleSystemAlarm(alarm: AlarmItem) {
-val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-val intent = Intent(this, AlarmReceiver::class.java).apply {
-putExtra("ALARM_LABEL", alarm.label)
-}
-val pendingIntent = PendingIntent.getBroadcast(
-this, alarm.id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-)
-val cal = Calendar.getInstance().apply {
-set(Calendar.HOUR_OF_DAY, alarm.hour)
-set(Calendar.MINUTE, alarm.minute)
-set(Calendar.SECOND, 0)
-if (before(Calendar.getInstance())) add(Calendar.DATE, 1)
-}
-alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-}
-private fun cancelSystemAlarm(alarm: AlarmItem) {
-val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-val intent = Intent(this, AlarmReceiver::class.java)
-val pendingIntent = PendingIntent.getBroadcast(
-this, alarm.id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-)
-alarmManager.cancel(pendingIntent)
-}
+    private fun scheduleSystemAlarm(alarm: AlarmItem) {
+        if (!alarm.isEnabled) return
+        val exact = AlarmScheduler.schedule(this, alarm)
+        if (!exact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = getSystemService(android.app.AlarmManager::class.java)
+            if (!manager.canScheduleExactAlarms()) {
+                Toast.makeText(
+                    this,
+                    "Для точного спрацювання дозвольте точні будильники в налаштуваннях Android.",
+                    Toast.LENGTH_LONG
+                ).show()
+                try {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                            Uri.parse("package:$packageName")
+                        )
+                    )
+                } catch (_: Exception) {
+                    Toast.makeText(this, "Відкрийте дозвіл вручну в налаштуваннях програм.", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                Toast.makeText(this, "Будильник встановлено з резервним системним плануванням.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun formatTime(hour: Int, minute: Int) = String.format("%02d:%02d", hour, minute)
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
