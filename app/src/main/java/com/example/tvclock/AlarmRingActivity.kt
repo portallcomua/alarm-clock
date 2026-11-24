@@ -18,6 +18,8 @@ import androidx.appcompat.app.AppCompatActivity
 class AlarmRingActivity : AppCompatActivity() {
     private var alarmId: Int = 0
     private var alarmLabel: String = "Будильник"
+    private var alarmAudioUri: String? = null
+    private var alarmSpokenText: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,6 +37,8 @@ class AlarmRingActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         alarmId = intent.getIntExtra("ALARM_ID", 0)
         alarmLabel = intent.getStringExtra("ALARM_LABEL") ?: "Будильник"
+        alarmAudioUri = intent.getStringExtra("ALARM_AUDIO_URI")
+        alarmSpokenText = intent.getStringExtra("ALARM_SPOKEN_TEXT") ?: ""
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -78,6 +82,8 @@ class AlarmRingActivity : AppCompatActivity() {
         val receiverIntent = Intent(this, AlarmReceiver::class.java).apply {
             putExtra("ALARM_LABEL", "$alarmLabel — повтор")
             putExtra("ALARM_ID", snoozeId)
+            putExtra("ALARM_AUDIO_URI", alarmAudioUri)
+            putExtra("ALARM_SPOKEN_TEXT", alarmSpokenText)
         }
         val pendingIntent = PendingIntent.getBroadcast(
             this,
