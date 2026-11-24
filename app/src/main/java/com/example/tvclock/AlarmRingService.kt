@@ -14,7 +14,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
-class AlarmRingService : Service() {\n    private val foregroundNotificationId = 2
+class AlarmRingService : Service() {
+    private val foregroundNotificationId = 2
     private var mediaPlayer: MediaPlayer? = null
     private var fallbackRingtone: android.media.Ringtone? = null
 
