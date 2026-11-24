@@ -39,17 +39,18 @@ class ClockOverlayService : Service() {
         val prefs = PrefsManager(this)
         container = FrameLayout(this)
 
+        val isLargeScreen = resources.configuration.screenWidthDp >= 600
         val clockView: View = if (prefs.isAnalog) {
             @Suppress("DEPRECATION")
             AnalogClock(this).apply {
-                val size = dp(if (prefs.isFullScreen) 360 else 128)
+                val size = dp(if (prefs.isFullScreen) { if (isLargeScreen) 520 else 260 } else { if (isLargeScreen) 180 else 120 })
                 layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
             }
         } else {
             TextClock(this).apply {
                 format24Hour = "HH:mm:ss"
                 format12Hour = "hh:mm:ss a"
-                textSize = if (prefs.isFullScreen) 92f else 27f
+                textSize = if (prefs.isFullScreen) { if (isLargeScreen) 96f else 48f } else 27f
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
