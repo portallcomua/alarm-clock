@@ -14,7 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
-class AlarmRingService : Service() {
+class AlarmRingService : Service() {\n    private val foregroundNotificationId = 2
     private var mediaPlayer: MediaPlayer? = null
     private var fallbackRingtone: android.media.Ringtone? = null
 
@@ -59,9 +59,9 @@ class AlarmRingService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(alarmId.coerceAtLeast(1), notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            startForeground(foregroundNotificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
-            startForeground(alarmId.coerceAtLeast(1), notification)
+            startForeground(foregroundNotificationId, notification)
         }
 
         if (mediaPlayer == null && fallbackRingtone == null) startAlarmAudio()
