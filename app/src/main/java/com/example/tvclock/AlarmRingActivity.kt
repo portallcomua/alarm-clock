@@ -1,10 +1,8 @@
 package com.example.tvclock
 
 import android.app.NotificationManager
+import android.content.Intent
 import android.graphics.Color
-import android.media.AudioAttributes
-import android.media.Ringtone
-import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -15,7 +13,6 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class AlarmRingActivity : AppCompatActivity() {
-    private var ringtone: Ringtone? = null
     private var alarmId: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,27 +56,11 @@ class AlarmRingActivity : AppCompatActivity() {
         layout.addView(btnStop)
         setContentView(layout)
         btnStop.requestFocus()
-
-        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        ringtone = RingtoneManager.getRingtone(this, alarmUri)?.apply {
-            audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
-            play()
-        }
     }
 
     private fun stopAlarm() {
-        ringtone?.stop()
+        stopService(Intent(this, AlarmRingService::class.java))
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(alarmId)
         finish()
-    }
-
-    override fun onDestroy() {
-        ringtone?.stop()
-        super.onDestroy()
     }
 }
