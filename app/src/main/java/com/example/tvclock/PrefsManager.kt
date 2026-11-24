@@ -34,8 +34,12 @@ class PrefsManager(context: Context) {
 
     fun getAlarms(): MutableList<AlarmItem> {
         val json = prefs.getString("alarms_list", null) ?: return mutableListOf()
-        val type = object : TypeToken<MutableList<AlarmItem>>() {}.type
-        return gson.fromJson(json, type)
+        return try {
+            val type = object : TypeToken<MutableList<AlarmItem>>() {}.type
+            gson.fromJson<MutableList<AlarmItem>>(json, type) ?: mutableListOf()
+        } catch (_: Exception) {
+            mutableListOf()
+        }
     }
 
     fun saveAlarms(list: List<AlarmItem>) {
