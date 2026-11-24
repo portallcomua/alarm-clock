@@ -3,6 +3,17 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseKeystoreBase64 = System.getenv("ANDROID_KEYSTORE_BASE64")
+val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val releaseKeystoreFile = layout.buildDirectory.file("release-signing/alarm-clock-release.jks").get().asFile
+
+if (!releaseKeystoreBase64.isNullOrBlank()) {
+    releaseKeystoreFile.parentFile.mkdirs()
+    releaseKeystoreFile.writeBytes(java.util.Base64.getDecoder().decode(releaseKeystoreBase64))
+}
+
 android {
     namespace = "com.example.tvclock"
     compileSdk = 34
@@ -15,9 +26,23 @@ android {
         versionName = providers.gradleProperty("appVersion").orElse("1.0").get()
     }
 
+    signingConfigs {
+        if (!releaseKeystoreBase64.isNullOrBlank()) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (!releaseKeystoreBase64.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
