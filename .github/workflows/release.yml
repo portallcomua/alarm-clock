@@ -41,12 +41,11 @@ jobs:
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
       - name: Build signed release APK
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/alarm-clock-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          export ANDROID_KEYSTORE_BASE64
           gradle --no-daemon assembleRelease -PappVersion="$APP_VERSION" -PappVersionCode="$APP_VERSION_CODE"
       - name: Publish APK to GitHub Release
         uses: softprops/action-gh-release@v2
