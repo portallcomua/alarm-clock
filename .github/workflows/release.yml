@@ -23,8 +23,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.2.1"
+      - name: Calculate version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
       - name: Build installable debug APK
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug -PappVersion="$APP_VERSION" -PappVersionCode="$APP_VERSION_CODE"
       - name: Publish APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
