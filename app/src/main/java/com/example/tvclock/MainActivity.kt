@@ -291,27 +291,28 @@ alarmsContainer.addView(btn)
 }
 }
 private fun scheduleSystemAlarm(alarm: AlarmItem) {
-val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-val intent = Intent(this, AlarmReceiver::class.java).apply {
-putExtra("ALARM_LABEL", alarm.label)
+    val exact = AlarmScheduler.schedule(this, alarm)
+    if (!exact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Toast.makeText(
+            this,
+            "Для точного спрацювання дозвольте будильники в налаштуваннях Android",
+            Toast.LENGTH_LONG
+        ).show()
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        } catch (_: Exception) {
+            // Some Android TV firmwares do not expose this settings screen.
+        }
+    }
 }
-val pendingIntent = PendingIntent.getBroadcast(
-this, alarm.id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-)
-val cal = Calendar.getInstance().apply {
-set(Calendar.HOUR_OF_DAY, alarm.hour)
-set(Calendar.MINUTE, alarm.minute)
-set(Calendar.SECOND, 0)
-if (before(Calendar.getInstance())) add(Calendar.DATE, 1)
-}
-alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-}
+
 private fun cancelSystemAlarm(alarm: AlarmItem) {
-val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-val intent = Intent(this, AlarmReceiver::class.java)
-val pendingIntent = PendingIntent.getBroadcast(
-this, alarm.id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-)
-alarmManager.cancel(pendingIntent)
+    AlarmScheduler.cancel(this, alarm)
 }
+
 }
