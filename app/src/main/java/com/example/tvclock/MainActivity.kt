@@ -28,6 +28,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var modeButton: Button
     private lateinit var styleButton: Button
     private lateinit var bootButton: Button
+    private var pendingAudioUri: Uri? = null
+    private var audioStatusView: TextView? = null
+    private val audioPickerRequest = 2001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,6 +112,19 @@ class MainActivity : AppCompatActivity() {
         setContentView(scroll)
         renderAlarmsList()
         clockButton.requestFocus()
+    }
+
+    @Deprecated("Deprecated in Android API; retained for broad device compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == audioPickerRequest && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) { }
+            pendingAudioUri = uri
+            audioStatusView?.text = "Обрано: " + (uri.lastPathSegment ?: "аудіофайл")
+        }
     }
 
     override fun onResume() {
@@ -245,6 +261,7 @@ class MainActivity : AppCompatActivity() {
     private fun showAlarmDialog(existing: AlarmItem? = null) {
         var hour = existing?.hour ?: 7
         var minute = existing?.minute ?: 30
+        pendingAudioUri = existing?.audioUri?.let { Uri.parse(it) }
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -294,9 +311,53 @@ class MainActivity : AppCompatActivity() {
             isFocusable = true
         }
 
+        val spokenInput = EditText(this).apply {
+            hint = "Голосове повідомлення (необов’язково)"
+            setText(existing?.spokenText ?: "")
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.LTGRAY)
+            textSize = 16f
+            minLines = 2
+            maxLines = 4
+            gravity = Gravity.TOP
+        }
+        audioStatusView = TextView(this).apply {
+            text = pendingAudioUri?.lastPathSegment?.let { "Обрано: " + it } ?: "Звук: стандартний сигнал"
+            textSize = 13f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        val chooseAudioButton = createTvButton("🎵  Вибрати MP3 / аудіофайл").apply {
+            setOnClickListener {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "audio/*"
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                try { startActivityForResult(picker, audioPickerRequest) }
+                catch (_: Exception) { Toast.makeText(this@MainActivity, "Не вдалося відкрити вибір файлу", Toast.LENGTH_LONG).show() }
+            }
+        }
+        val clearAudioButton = createTvButton("Використовувати стандартний сигнал").apply {
+            setOnClickListener {
+                pendingAudioUri = null
+                audioStatusView?.text = "Звук: стандартний сигнал"
+            }
+        }
+
         layout.addView(timeDisplay)
         layout.addView(controls)
         layout.addView(labelInput)
+        layout.addView(TextView(this).apply {
+            text = "Власний звук та голос"
+            setTextColor(Color.rgb(56, 189, 248))
+            textSize = 16f
+            setPadding(0, dp(12), 0, 0)
+        })
+        layout.addView(chooseAudioButton)
+        layout.addView(audioStatusView)
+        layout.addView(clearAudioButton)
+        layout.addView(spokenInput)
 
         AlertDialog.Builder(this)
             .setTitle(if (existing == null) "Новий будильник" else "Редагувати будильник")
@@ -309,7 +370,7 @@ class MainActivity : AppCompatActivity() {
                     while (alarms.any { it.id == id }) {
                         id = if (id == Int.MAX_VALUE) 1 else id + 1
                     }
-                    val created = AlarmItem(id, hour, minute, label, true)
+                    val created = AlarmItem(id, hour, minute, label, true, pendingAudioUri?.toString(), spokenInput.text.toString().trim())
                     alarms.add(created)
                     prefs.saveAlarms(alarms)
                     scheduleSystemAlarm(created)
@@ -317,12 +378,14 @@ class MainActivity : AppCompatActivity() {
                     AlarmScheduler.cancel(this, existing)
                     val index = alarms.indexOfFirst { it.id == existing.id }
                     if (index >= 0) {
-                        val updated = existing.copy(hour = hour, minute = minute, label = label)
+                        val updated = existing.copy(hour = hour, minute = minute, label = label, audioUri = pendingAudioUri?.toString(), spokenText = spokenInput.text.toString().trim())
                         alarms[index] = updated
                         prefs.saveAlarms(alarms)
                         scheduleSystemAlarm(updated)
                     }
                 }
+                pendingAudioUri = null
+                audioStatusView = null
                 renderAlarmsList()
             }
             .setNegativeButton("Скасувати", null)
