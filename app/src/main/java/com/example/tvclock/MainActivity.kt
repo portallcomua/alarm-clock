@@ -160,6 +160,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Re-arm alarms after returning from Android's exact-alarm access screen.
+        AlarmScheduler.rescheduleAll(this)
+    }
+
     private fun toggleClock(btn: Button) {
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Надайте дозвіл 'Поверх інших вікон' у налаштуваннях ТВ", Toast.LENGTH_LONG).show()
