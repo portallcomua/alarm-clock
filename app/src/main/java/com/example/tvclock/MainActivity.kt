@@ -259,7 +259,10 @@ class MainActivity : AppCompatActivity() {
             .setView(layout)
             .setPositiveButton("Зберегти") { _, _ ->
                 val list = prefs.getAlarms()
-                val newId = (System.currentTimeMillis() % 100000).toInt()
+                var newId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt().coerceAtLeast(1)
+                while (list.any { it.id == newId }) {
+                    newId = if (newId == Int.MAX_VALUE) 1 else newId + 1
+                }
                 val labelText = inputLabel.text.toString().ifBlank { "Будильник" }
                 val newItem = AlarmItem(newId, hour, minute, labelText, true)
                 list.add(newItem)
