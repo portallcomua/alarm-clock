@@ -46,6 +46,8 @@ object AlarmScheduler {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("ALARM_LABEL", alarm.label)
             putExtra("ALARM_ID", alarm.id)
+            putExtra("ALARM_AUDIO_URI", alarm.audioUri)
+            putExtra("ALARM_SPOKEN_TEXT", alarm.spokenText)
         }
         return PendingIntent.getBroadcast(
             context,
