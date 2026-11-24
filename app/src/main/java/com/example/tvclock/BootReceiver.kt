@@ -16,6 +16,10 @@ class BootReceiver : BroadcastReceiver() {
 
         AlarmScheduler.rescheduleAll(context)
 
+        val shouldStartClock = intent.action == Intent.ACTION_BOOT_COMPLETED ||
+            intent.action == Intent.ACTION_MY_PACKAGE_REPLACED
+        if (!shouldStartClock) return
+
         val prefs = PrefsManager(context)
         if (!prefs.autoStartOnBoot) return
 
