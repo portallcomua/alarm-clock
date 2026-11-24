@@ -35,7 +35,7 @@ class AlarmRingService : Service() {
         }
 
         val openIntent = Intent(this, AlarmRingActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("ALARM_LABEL", label)
             putExtra("ALARM_ID", alarmId)
         }
