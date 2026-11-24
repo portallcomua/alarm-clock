@@ -1,5 +1,7 @@
 package com.example.tvclock
 
+import android.Manifest
+
 import android.app.AlarmManager
 import android.app.AlertDialog
 import android.app.PendingIntent
@@ -26,6 +28,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = PrefsManager(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
 
         val scrollView = ScrollView(this).apply {
             setBackgroundColor(Color.parseColor("#0F172A"))
