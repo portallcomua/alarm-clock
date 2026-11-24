@@ -9,7 +9,9 @@ data class AlarmItem(
     var hour: Int,
     var minute: Int,
     var label: String,
-    var isEnabled: Boolean
+    var isEnabled: Boolean,
+    var audioUri: String? = null,
+    var spokenText: String = ""
 )
 
 class PrefsManager(context: Context) {
