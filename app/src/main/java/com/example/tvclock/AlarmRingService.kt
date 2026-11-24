@@ -3,19 +3,20 @@ package com.example.tvclock
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.Service
 import android.app.PendingIntent
+import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
-import android.media.Ringtone
+import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
 class AlarmRingService : Service() {
-    private var ringtone: Ringtone? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private var fallbackRingtone: android.media.Ringtone? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -23,19 +24,20 @@ class AlarmRingService : Service() {
         val label = intent?.getStringExtra("ALARM_LABEL") ?: "Будильник"
         val alarmId = intent?.getIntExtra("ALARM_ID", 0) ?: 0
         val channelId = "alarm_ringing"
-        val manager = getSystemService(NotificationManager::class.java)
+        val notificationManager = getSystemService(NotificationManager::class.java)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
+            notificationManager.createNotificationChannel(
                 NotificationChannel(channelId, "Будильники", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "Сповіщення про спрацювання будильника"
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    setSound(null, null)
                 }
             )
         }
 
         val openIntent = Intent(this, AlarmRingActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra("ALARM_LABEL", label)
             putExtra("ALARM_ID", alarmId)
         }
@@ -51,20 +53,59 @@ class AlarmRingService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
+            .setAutoCancel(false)
             .setFullScreenIntent(openPendingIntent, true)
             .setContentIntent(openPendingIntent)
             .build()
 
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(alarmId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            startForeground(alarmId.coerceAtLeast(1), notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
-            startForeground(alarmId, notification)
+            startForeground(alarmId.coerceAtLeast(1), notification)
         }
 
-        if (ringtone == null) {
-            val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ringtone = RingtoneManager.getRingtone(this, alarmUri)?.apply {
+        if (mediaPlayer == null && fallbackRingtone == null) startAlarmAudio()
+        return START_NOT_STICKY
+    }
+
+    private fun startAlarmAudio() {
+        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            ?: return
+
+        try {
+            val player = MediaPlayer()
+            mediaPlayer = player
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            player.setDataSource(this, alarmUri)
+            player.isLooping = true
+            player.setOnPreparedListener { prepared ->
+                if (mediaPlayer === prepared) prepared.start() else prepared.release()
+            }
+            player.setOnErrorListener { failed, _, _ ->
+                if (mediaPlayer === failed) {
+                    mediaPlayer = null
+                    try { failed.release() } catch (_: Exception) { }
+                    startFallbackRingtone(alarmUri)
+                }
+                true
+            }
+            player.prepareAsync()
+        } catch (_: Exception) {
+            try { mediaPlayer?.release() } catch (_: Exception) { }
+            mediaPlayer = null
+            startFallbackRingtone(alarmUri)
+        }
+    }
+
+    private fun startFallbackRingtone(uri: android.net.Uri) {
+        try {
+            fallbackRingtone = RingtoneManager.getRingtone(this, uri)?.apply {
                 audioAttributes = AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -72,13 +113,17 @@ class AlarmRingService : Service() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
                 play()
             }
+        } catch (_: Exception) {
+            fallbackRingtone = null
         }
-        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        ringtone?.stop()
-        ringtone = null
+        try { mediaPlayer?.stop() } catch (_: Exception) { }
+        try { mediaPlayer?.release() } catch (_: Exception) { }
+        mediaPlayer = null
+        try { fallbackRingtone?.stop() } catch (_: Exception) { }
+        fallbackRingtone = null
         super.onDestroy()
     }
 }
