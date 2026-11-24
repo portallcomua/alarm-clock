@@ -54,5 +54,10 @@ class AlarmReceiver : BroadcastReceiver() {
             .build()
 
         manager.notify(alarmId, notification)
+
+        // The saved alarms are daily alarms: prepare the next occurrence immediately.
+        PrefsManager(context).getAlarms()
+            .firstOrNull { it.id == alarmId && it.isEnabled }
+            ?.let { AlarmScheduler.schedule(context, it) }
     }
 }
