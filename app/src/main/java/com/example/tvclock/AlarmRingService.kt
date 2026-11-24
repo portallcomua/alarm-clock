@@ -47,6 +47,8 @@ class AlarmRingService : Service() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra("ALARM_LABEL", label)
             putExtra("ALARM_ID", alarmId)
+            putExtra("ALARM_AUDIO_URI", audioUri)
+            putExtra("ALARM_SPOKEN_TEXT", spokenText)
         }
         val openPendingIntent = PendingIntent.getActivity(
             this, alarmId, openIntent,
