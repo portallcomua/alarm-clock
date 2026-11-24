@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.tvclock"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = providers.gradleProperty("appVersionCode").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("appVersion").orElse("1.0").get()
     }
 
     buildTypes {
