@@ -59,6 +59,16 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, dp(18))
         })
 
+        val updateButton = createTvButton("↻  Оновлення застосунку з GitHub")
+        updateButton.setOnClickListener {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/portallcomua/alarm-clock/releases/latest")))
+            } catch (_: Exception) {
+                Toast.makeText(this, "Не вдалося відкрити сторінку оновлень GitHub.", Toast.LENGTH_LONG).show()
+            }
+        }
+        root.addView(updateButton)
+
         clockButton = createTvButton("")
         clockButton.setOnClickListener { toggleClock() }
         root.addView(clockButton)
