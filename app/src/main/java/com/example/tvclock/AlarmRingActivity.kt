@@ -105,7 +105,7 @@ class AlarmRingActivity : AppCompatActivity() {
 
     private fun stopAlarm() {
         stopService(Intent(this, AlarmRingService::class.java))
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(alarmId.coerceAtLeast(1))
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(2)
         finish()
     }
 }
