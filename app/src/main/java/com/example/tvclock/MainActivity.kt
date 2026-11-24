@@ -371,7 +371,7 @@ class MainActivity : AppCompatActivity() {
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
                 ).apply { setMargins(dp(2), 0, dp(2), 0) })
             }
-            actionButton(if (alarm.isEnabled) "Увімкнено" else "Вимкнено") {
+            actionButton(if (alarm.isEnabled) "Вимкнути" else "Увімкнути") {
                 val current = prefs.getAlarms()
                 val item = current.firstOrNull { it.id == alarm.id } ?: return@actionButton
                 item.isEnabled = !item.isEnabled
